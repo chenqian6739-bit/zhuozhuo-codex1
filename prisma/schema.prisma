@@ -1,0 +1,94 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = env("DATABASE_PROVIDER")
+  url      = env("DATABASE_URL")
+}
+
+enum Platform {
+  TAOBAO
+  PINDUODUO
+}
+
+enum CrawlStatus {
+  SUCCESS
+  PARSE_FAILED
+  BLOCKED
+  TIMEOUT
+}
+
+enum NotificationChannel {
+  TELEGRAM
+  EMAIL
+}
+
+model Product {
+  id                 String          @id @default(cuid())
+  platform           Platform
+  externalProductId  String
+  url                String          @unique
+  title              String
+  imageUrl           String?
+  defaultSkuId       String?
+  monitoringEnabled  Boolean         @default(true)
+  checkIntervalMins  Int             @default(30)
+  preferredChannel   NotificationChannel @default(TELEGRAM)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  snapshots          PriceSnapshot[]
+  rules              AlertRule[]
+}
+
+model PriceSnapshot {
+  id            String    @id @default(cuid())
+  productId     String
+  platform      Platform
+  skuId         String?
+  listedPrice   Float?
+  finalPrice    Float?
+  currency      String    @default("CNY")
+  discountText  String?
+  inStock       Boolean?
+  capturedAt    DateTime  @default(now())
+  rawPayload    Json
+  product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model AlertRule {
+  id              String   @id @default(cuid())
+  productId       String
+  type            String   @default("PRICE_THRESHOLD")
+  operator        String   @default("LTE")
+  thresholdValue  Float
+  cooldownMinutes Int      @default(720)
+  isEnabled       Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  notifications   NotificationLog[]
+}
+
+model NotificationLog {
+  id          String               @id @default(cuid())
+  productId   String
+  ruleId      String
+  channel     NotificationChannel
+  status      String
+  messageHash String
+  sentAt      DateTime             @default(now())
+  product     Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
+  rule        AlertRule            @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+}
+
+model CrawlRunLog {
+  id             String      @id @default(cuid())
+  productId      String
+  platform       Platform
+  status         CrawlStatus
+  retryCount     Int         @default(0)
+  debugArtifact  String?
+  errorMessage   String?
+  createdAt      DateTime    @default(now())
+}
